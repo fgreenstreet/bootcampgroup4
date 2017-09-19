@@ -3,10 +3,19 @@
 */
 #include <SPI.h>    // Serial Peripheral Interface bus library
 #include "RF24.h"   // Library for nRF24L01s
+#include <Servo.h>
+
+
 
 /****************** User Config ***************************/
 /***      Set this radio as radio number 0 or 1         ***/
 bool radioNumber = 1;
+
+/*Creates servos*/
+Servo myservoL;  // create servo object to control a servo
+Servo myservoR;  // create servo object to control a servo
+int servoSpeedR = 100; 
+int servoSpeedL = 0;
 
 /* Hardware configuration: Set up nRF24L01 radio on SPI bus pins and pins 7 & 8 */
 //RF24 radio(7,8);  // For Arduino UNO
@@ -17,7 +26,9 @@ byte addresses[][6] = {"1Node","2Node"};
 
 bool role = 0; // Local state variable that controls whether this node is sending or receiving
 void setup() {
-  pinMode(LED_BUILTIN, OUTPUT);
+  myservoR.attach(6);  // attaches the servo on pin 9 to the servo object
+  myservoL.attach(5);  // attaches the servo on pin 9 to the servo object
+  
   Serial.begin(115200);
   radio.begin();
 
@@ -48,8 +59,42 @@ void setup() {
   radio.startListening();
 }
 
+void moveWheels(int order){
+   if (order == 1){
+    //left
+    servoSpeedR = 100; 
+    servoSpeedL = 0;
+    //Serial.println("aaaa");
+    myservoR.write(servoSpeedR); 
+    myservoL.write(servoSpeedL);
+    delay(100);
+  }else if(order == 2){
+    //right
+    servoSpeedR = 180;
+    servoSpeedL = 90;  
+    //Serial.println("bbbb");
+    myservoR.write(servoSpeedR); 
+    myservoL.write(servoSpeedL); 
+    delay(100);
+  }else{
+    int randomNumber = random(1000); 
+    int random1 = random(100);
+    int random2 = random(100,200);
+    int signL = random1%2==0 ? 1 : -1; 
+    int signR = random1%2==0 ? 1 : -1; 
+    if (randomNumber % 2 == 0){
+      servoSpeedR = signR * 98;
+      servoSpeedL = signL * 20;
+    }else{
+      servoSpeedR = signR * 120;
+      servoSpeedL = signL * 90;
+    }
+   myservoR.write(servoSpeedR); 
+   myservoL.write(servoSpeedL); 
+   delay(100);   
+  }
+}
 void loop() {
-
   /****************** Transmitting Role ***************************/  
   if (role == 1)
   {
@@ -103,13 +148,7 @@ void loop() {
     if( radio.available()) {                                        // Variable for the received timestamp
       while (radio.available()) {                                   // While there is data ready
         radio.read( &order, sizeof(unsigned long) );             // Get the payload
-        if (order == 1){
-          digitalWrite(LED_BUILTIN, HIGH);   // turn the LED on (HIGH is the voltage level)
-          delay(1000);                       // wait for a second 
-        }else{
-          digitalWrite(LED_BUILTIN, LOW);    // turn the LED off by making the voltage LOW
-          delay(1000); 
-        }
+        moveWheels(order);
       }
       radio.stopListening();                                        // First, stop listening so we can talk   
       radio.write( &order, sizeof(unsigned long) );              // Send the final one back.      
