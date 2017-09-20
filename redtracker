@@ -1,91 +1,70 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Mon Sep 18 20:38:41 2017
-
-@author: fmjgreenstreet
-"""
 
 
-"""
-Red tracker in python (using opencv)
-"""
-# Import useful libraries
+# import the necessary packages
+from collections import deque
 import numpy as np
-import matplotlib.pyplot as plt
 import cv2
-import math
-import time
 
-# Specify camera/device number (usually 0)
-camera = 0
 
-# Specifiy number of frames to acquire
-num_frames = 1
+# define the lower and upper boundaries of the "red"
+# ball in the HSV color space, then initialize the
+# list of tracked points
+redLower = (149,168,37)
+redUpper = (179,255,255)
 
-# Open camera stream
-cam = cv2.VideoCapture(camera)
+camera = cv2.VideoCapture(0)
 
-# Get image size
-width = int(cam.get(cv2.CAP_PROP_FRAME_WIDTH))
-height = int(cam.get(cv2.CAP_PROP_FRAME_HEIGHT))
+# keep looping
+while True:
+	# grab the current frame
+	(grabbed, frame) = camera.read()
 
-# Make space for intermediate images (of correct data type)
-hsvimg = np.zeros((height, width, 3), dtype = np.float32)
-hsvthresh = np.zeros((height, width), dtype = np.float32)
-blurred = np.zeros((height, width, 3), dtype = np.float32)
-centroid = np.zeros((height, width), dtype = np.uint8)
-# Acquire frames, measure change from previous frame
-for i in range(0, num_frames):
-    
-    # Read the next image from camera
-    ret_val, image = cam.read()
-    imagecopy = image
+   # blur it, and convert it to the HSV
+	# color space
 
-    # Convert to hsv image
-    hsvimg = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+	# blurred = cv2.GaussianBlur(frame, (11, 11), 0)
+	hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
-    # Smoothing
-    blurred = cv2.GaussianBlur(hsvimg, (5, 5), 0)
+	# construct a mask for the color "green", then perform
+	# a series of dilations and erosions to remove any small
+	# blobs left in the mask
+	mask = cv2.inRange(hsv, redLower, redUpper)
+	mask = cv2.erode(mask, None, iterations=2)
+	mask = cv2.dilate(mask, None, iterations=2)
 
-    # Thresholding using hsv
-    lower_red = np.array([149,168,37])
-    upper_red = np.array([179,255,255])
-    
-    hsvthresh = cv2.inRange(blurred, lower_red, upper_red)
-    
-    #Finding contours
-    im2, contours, hierarchy = cv2.findContours(hsvthresh,cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
-    ## Will show all contours on image
-    #contimg = cv2.drawContours(image, contours, -1, (0,255,0))
-    num_contours = len(contours)-1
-    
-    #Finding the object with the largest area
-    max_val = 0
-    biggest_ob = 0
-    for i in range(0,num_contours):
-        cnt = contours[i]
-        area = cv2.contourArea(cnt)
-        if area>max_val:
-            max_val = area
-            biggest_ob = i
-    
-    #Findng the centroid of this object: (cent_x, cent_y)
-    #Moment = cv2.moments(contours[biggest_ob])
-    #cent_x = int(Moment['m10']/Moment['m00'])
-    #cent_y = int(Moment['m01']/Moment['m00'])
-    #print('(',cent_x,',',cent_y,')')
-    
-    
-# Release the camera "handle"
-cam.release()
-#centroid[cent_x,cent_y] = 1;
+	# find contours in the mask and initialize the current
+	# (x, y) center of the ball
+	cnts = cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL,
+		cv2.CHAIN_APPROX_SIMPLE)[-2]
+	center = None
 
-#cv2.drawContours(imagecopy, contours,biggest_ob , (0, 255, 0))
-#cv2.circle(imagecopy, (cent_x, cent_y), 7, (255, 255, 255), -1)
-cv2.imshow('hsvthresh', hsvthresh)
-#cv2.imshow('image', imagecopy)
-cv2.waitKey(1)
-##Plotting abilities, to get rid of windows use: cv2.destroyAllWindows
-#cv2.imshow('Contours',contimg)
-#cv2.waitKey(1)
+	# only proceed if at least one contour was found
+	if len(cnts) > 0:
+		# find the largest contour in the mask, then use
+		# it to compute the minimum enclosing circle and
+		# centroid
+		c = max(cnts, key=cv2.contourArea)
+		((x, y), radius) = cv2.minEnclosingCircle(c)
+		M = cv2.moments(c)
+		center = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
+
+		# only proceed if the radius meets a minimum size
+		if radius > 10:
+			# draw the circle and centroid on the frame,
+			# then update the list of tracked points
+			cv2.circle(frame, (int(x), int(y)), int(radius),
+				(0, 255, 255), 2)
+			cv2.circle(frame, center, 5, (0, 0, 255), -1)
+
+
+	# show the frame to our screen
+	cv2.imshow("Frame", frame)
+	key = cv2.waitKey(1) & 0xFF
+
+	# if the 'q' key is pressed, stop the loop
+	if key == ord("q"):
+		break
+
+# cleanup the camera and close any open windows
+camera.release()
+cv2.destroyAllWindows()
