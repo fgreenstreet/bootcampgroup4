@@ -14,7 +14,7 @@ import math
 import imutils 
 
 
-def colourObjFindr(colourLower, colourUpper):
+def colourObjFindr(colourLower, colourUpper, multiobj):
     mask = cv2.inRange(hsv, colourLower, colourUpper)
     mask = cv2.erode(mask, None, iterations=2)
     mask = cv2.dilate(mask, None, iterations=2)
@@ -33,18 +33,40 @@ def colourObjFindr(colourLower, colourUpper):
 		# centroid
         print ('found an object')
         #c = max(cnts, key=cv2.contourArea)
-        for c in range(0, len(cnts)):
-            ((x, y), radius) = cv2.minEnclosingCircle(cnts[c])
-            M = cv2.moments(cnts[c])
-            centers.append([int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"])])
+        if multiobj == 1:
+            for c in range(0, len(cnts)):
+                ((x, y), radius) = cv2.minEnclosingCircle(cnts[c])
+                M = cv2.moments(cnts[c])
+                centers.append([int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"])])
         
+                if radius > 1:
+                    cv2.circle(frame, (int(x), int(y)), int(radius),
+				     (0, 255, 255), 2)
+                    cv2.circle(frame, tuple(centers[c]), 2, (255, 255, 255), -1)
+        elif multiobj == 0:
+            c = max(cnts, key=cv2.contourArea)
+            ((x, y), radius) = cv2.minEnclosingCircle(c)
+            M = cv2.moments(c)
+            centers = (int(M["m10"] / M["m00"]), int(M["m01"] / M["m00"]))
+            
             if radius > 1:
                 cv2.circle(frame, (int(x), int(y)), int(radius),
-				(0, 255, 255), 2)
-                cv2.circle(frame, tuple(centers[c]), 5, (255, 255, 255), -1)
+				     (0, 255, 255), 2)
+                cv2.circle(frame, tuple(centers[c]), 2, (255, 255, 255), -1)
+            
             
     return centers
 
+
+def distanceFinder(midpoint, centers):
+    distances = []
+    for a in range (0, len(centers)):
+        center = centers[a]
+        distancex = midpoint[0]-center[0]
+        distancey = midpoint[1]-center[1]
+        distance = math.sqrt(distancex**2 + distancey**2)
+        distances.append(distance)
+    
 # define the lower and upper boundaries of the "red"
 # ball in the HSV color space, then initialize the
 # list of tracked points
@@ -70,11 +92,18 @@ while True:
 	# color space
     hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
     
-    Rcenter = colourObjFindr(redLower, redUpper)
-    Gcenter = colourObjFindr(greenLower, greenUpper)
-    Bcenter = colourObjFindr(blueLower, blueUpper)
-    Wcenter = colourObjFindr(whiteLower, whiteUpper)
-
+    Rcenter = colourObjFindr(redLower, redUpper,0)
+    Gcenter = colourObjFindr(greenLower, greenUpper, 0)
+    
+    Bcenter = colourObjFindr(blueLower, blueUpper, 1)
+    Wcenter = colourObjFindr(whiteLower, whiteUpper, 1)
+    
+    midx = (Rcenter[0]+Gcenter[0])/2.
+    midy = (Rcenter[1]+Gcenter[1])/2.
+    midpoint = tuple([midx,midy])
+    
+    BlueDist = distanceFinder(midpoint, Bcenter)
+    WhiteDist = distanceFinder(midpoint, Wcenter)
             
 	# show the frame to our screen
     cv2.imshow("Frame", frame)
